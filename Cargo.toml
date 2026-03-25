@@ -4,4 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-enum-extract-impl = { path = "./enum-extract-impl" }
+proc-macro-util = { path = "./proc-macro-util", optional = true }
+
+[features]
+macro = ["dep:proc-macro-util"]

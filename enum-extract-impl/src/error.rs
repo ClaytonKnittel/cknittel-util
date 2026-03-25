@@ -3,7 +3,7 @@ use std::{
   fmt::{Debug, Display},
 };
 
-use proc_macro::Span;
+use proc_macro2::Span;
 use proc_macro_error::abort;
 
 #[derive(Clone)]
