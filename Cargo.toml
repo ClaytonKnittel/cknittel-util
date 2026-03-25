@@ -8,3 +8,6 @@ proc-macro-util = { path = "./proc-macro-util", optional = true }
 
 [features]
 macro = ["dep:proc-macro-util"]
+
+[dev-dependencies]
+googletest = "0.14.2"
