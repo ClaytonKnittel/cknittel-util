@@ -11,3 +11,4 @@ macro = ["dep:proc-macro-util"]
 
 [dev-dependencies]
 googletest = "0.14.2"
+itertools = "0.14.0"
