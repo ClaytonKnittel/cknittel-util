@@ -1,3 +1,5 @@
+pub mod debug_assert;
+pub mod hint;
 pub mod iter;
 pub mod option;
 pub mod peekable_stream;
