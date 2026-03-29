@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+num-traits = "0.2.19"
 proc-macro-util = { path = "./proc-macro-util", optional = true }
 
 [features]
