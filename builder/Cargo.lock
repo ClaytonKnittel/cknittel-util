@@ -21,11 +21,20 @@ checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 name = "builder"
 version = "0.1.0"
 dependencies = [
+ "cknittel-util",
  "googletest",
  "proc-macro-error",
  "proc-macro2",
  "quote",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "cknittel-util"
+version = "0.1.0"
+dependencies = [
+ "num-traits",
+ "proc-macro-util",
 ]
 
 [[package]]
@@ -88,6 +97,13 @@ dependencies = [
  "proc-macro2",
  "quote",
  "version_check",
+]
+
+[[package]]
+name = "proc-macro-util"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
 ]
 
 [[package]]
