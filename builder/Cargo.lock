@@ -21,20 +21,13 @@ checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 name = "builder"
 version = "0.1.0"
 dependencies = [
- "cknittel-util",
  "googletest",
  "proc-macro-error",
+ "proc-macro-util",
  "proc-macro2",
  "quote",
  "syn 2.0.117",
-]
-
-[[package]]
-name = "cknittel-util"
-version = "0.1.0"
-dependencies = [
- "num-traits",
- "proc-macro-util",
+ "util-impl",
 ]
 
 [[package]]
@@ -185,6 +178,13 @@ name = "unicode-ident"
 version = "1.0.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e6e4313cd5fcd3dad5cafa179702e2b244f760991f45397d14d4ebf38247da75"
+
+[[package]]
+name = "util-impl"
+version = "0.1.0"
+dependencies = [
+ "num-traits",
+]
 
 [[package]]
 name = "version_check"

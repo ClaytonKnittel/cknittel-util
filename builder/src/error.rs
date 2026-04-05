@@ -7,12 +7,12 @@ use proc_macro_error::abort;
 use proc_macro2::Span;
 
 #[derive(Clone)]
-pub struct BuilderError {
+pub struct BuilderInternalError {
   message: String,
   span: Span,
 }
 
-impl BuilderError {
+impl BuilderInternalError {
   pub fn new(message: impl Into<String>, span: Span) -> Self {
     Self {
       message: message.into(),
@@ -25,22 +25,23 @@ impl BuilderError {
   }
 
   pub fn abort(&self) -> ! {
-    abort!(self.span, self.message)
+    abort!(self.span, self.message);
+    unreachable!()
   }
 }
 
-impl Error for BuilderError {}
+impl Error for BuilderInternalError {}
 
-impl Display for BuilderError {
+impl Display for BuilderInternalError {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     write!(f, "{}", self.message)
   }
 }
 
-impl Debug for BuilderError {
+impl Debug for BuilderInternalError {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     write!(f, "{self}")
   }
 }
 
-pub type BuilderResult<T = ()> = Result<T, BuilderError>;
+pub type BuilderInternalResult<T = ()> = Result<T, BuilderInternalError>;

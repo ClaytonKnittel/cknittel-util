@@ -7,11 +7,12 @@ edition = "2024"
 proc-macro = true
 
 [dependencies]
-cknittel-util = { path = "../", features = ["macro"] }
 proc-macro-error = "1.0.4"
+proc-macro-util = { path = "../proc-macro-util" }
 proc-macro2 = "1.0.106"
 quote = "1.0.45"
 syn = "2.0.117"
+util-impl = { path = "../util-impl" }
 
 [dev-dependencies]
 googletest = "0.14.2"

@@ -1,34 +1,32 @@
 mod error;
 
-use cknittel_util::{
-  iter::JoinWith,
-  proc_macro_util::collect_tokens::{CollectTokens, TryCollectTokens},
-};
 use proc_macro_error::proc_macro_error;
+use proc_macro_util::collect_tokens::{CollectTokens, TryCollectTokens};
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{Data, DeriveInput, Field, parse_macro_input, spanned::Spanned};
+use util_impl::iter::JoinWith;
 
-use crate::error::{BuilderError, BuilderResult};
+use crate::error::{BuilderInternalError, BuilderInternalResult};
 
-fn generate_default_field_member(field: &Field) -> BuilderResult<TokenStream> {
+fn generate_default_field_member(field: &Field) -> BuilderInternalResult<TokenStream> {
   let ident = field
     .ident
     .as_ref()
-    .ok_or_else(|| BuilderError::new("Expect field to have a name", field.span()))?;
+    .ok_or_else(|| BuilderInternalError::new("Expect field to have a name", field.span()))?;
   let ty = &field.ty;
   Ok(quote! { #ident: Option<#ty> })
 }
 
-fn generate_member_for_field(field: &Field) -> BuilderResult<TokenStream> {
+fn generate_member_for_field(field: &Field) -> BuilderInternalResult<TokenStream> {
   generate_default_field_member(field)
 }
 
-fn generate_default_builders(field: &Field) -> BuilderResult<TokenStream> {
+fn generate_default_builders(field: &Field) -> BuilderInternalResult<TokenStream> {
   let ident = field
     .ident
     .as_ref()
-    .ok_or_else(|| BuilderError::new("Expect field to have a name", field.span()))?;
+    .ok_or_else(|| BuilderInternalError::new("Expect field to have a name", field.span()))?;
   let with = proc_macro2::Ident::new(&format!("with_{}", ident), ident.span());
   let setter = proc_macro2::Ident::new(&format!("set_{}", ident), ident.span());
   let ty = &field.ty;
@@ -44,7 +42,7 @@ fn generate_default_builders(field: &Field) -> BuilderResult<TokenStream> {
   })
 }
 
-fn generate_builders_for_field(field: &Field) -> BuilderResult<TokenStream> {
+fn generate_builders_for_field(field: &Field) -> BuilderInternalResult<TokenStream> {
   generate_default_builders(field)
   // match &field.ty {
   //   Type::Path(path) => {}
@@ -55,7 +53,7 @@ fn generate_builders_for_field(field: &Field) -> BuilderResult<TokenStream> {
 fn generate_build<'a>(
   fields: impl IntoIterator<Item = &'a Field>,
   result_type: &proc_macro2::Ident,
-) -> BuilderResult<TokenStream> {
+) -> BuilderInternalResult<TokenStream> {
   let field_initializers = fields
     .into_iter()
     .map(|field| {
@@ -63,25 +61,28 @@ fn generate_build<'a>(
         .ident
         .as_ref()
         .expect("Already asserted that field has ident");
+      let field_name_str = ident.to_string();
       quote! {
-        #ident: self.#ident.unwrap()
+        #ident: self.#ident.ok_or_else(|| {
+          ::cknittel_util::builder::error::BuilderError::missing_field(#field_name_str)
+        })?
       }
     })
     .join_with(|| quote! { , })
     .collect_tokens();
 
   Ok(quote! {
-    pub fn build(self) -> #result_type {
-      #result_type {
+    pub fn build(self) -> ::cknittel_util::builder::error::BuilderResult<#result_type> {
+      Ok(#result_type {
         #field_initializers
-      }
+      })
     }
   })
 }
 
-fn test(input: DeriveInput) -> BuilderResult<TokenStream> {
+fn build_builder_impl(input: DeriveInput) -> BuilderInternalResult<TokenStream> {
   let Data::Struct(data) = input.data else {
-    return Err(BuilderError::new(
+    return Err(BuilderInternalError::new(
       "Can only derive `Builder` on a struct",
       input.ident.span(),
     ));
@@ -124,7 +125,7 @@ fn test(input: DeriveInput) -> BuilderResult<TokenStream> {
 pub fn derive_builder(tokens: proc_macro::TokenStream) -> proc_macro::TokenStream {
   let input = parse_macro_input!(tokens as DeriveInput);
 
-  match test(input) {
+  match build_builder_impl(input) {
     Ok(tokens) => tokens.into(),
     Err(err) => err.abort(),
   }

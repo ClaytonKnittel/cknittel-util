@@ -4,11 +4,13 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-num-traits = "0.2.19"
+builder = { path = "./builder", optional = true }
 proc-macro-util = { path = "./proc-macro-util", optional = true }
+util-impl = { path = "./util-impl" }
 
 [features]
 macro = ["dep:proc-macro-util"]
+builder = ["dep:builder"]
 
 [dev-dependencies]
 googletest = "0.14.2"
