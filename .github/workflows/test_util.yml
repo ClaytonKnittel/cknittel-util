@@ -1,0 +1,57 @@
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+env:
+  CARGO_TERM_COLOR: always
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        features: ["", "--all-features"]
+
+    name: "Build and Unit Test ${{ matrix.features }}"
+
+    env:
+      CARGO_ARGS: ${{ matrix.features }}
+
+    steps:
+      - name: Check out cknittel-util
+        uses: actions/checkout@v4
+        with:
+          path: cknittel-util
+          submodules: recursive
+      - name: Initialize and Build
+        working-directory: cknittel-util
+        run: |
+          cargo build $CARGO_ARGS
+      - name: Run util-impl unit tests
+        working-directory: cknittel-util/util-impl
+        run: |
+          cargo test $CARGO_ARGS
+      - name: Run unit tests
+        working-directory: cknittel-util
+        run: |
+          cargo test $CARGO_ARGS
+      - name: Run unit tests in release mode
+        working-directory: cknittel-util
+        run: |
+          cargo test $CARGO_ARGS --release
+      - name: Clippy lint builder
+        working-directory: cknittel-util/builder
+        run: |
+          cargo clippy $CARGO_ARGS -- -D warnings
+      - name: Clippy lint proc-macro-util
+        working-directory: cknittel-util/proc-macro-util
+        run: |
+          cargo clippy $CARGO_ARGS -- -D warnings
+      - name: Clippy lint util-impl
+        working-directory: cknittel-util/util-impl
+        run: |
+          cargo clippy $CARGO_ARGS -- -D warnings
+      - name: Clippy lint
+        working-directory: cknittel-util
+        run: |
+          cargo clippy $CARGO_ARGS -- -D warnings
