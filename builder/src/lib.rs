@@ -1,14 +1,13 @@
 mod error;
 
+use proc_macro2::TokenStream;
 use proc_macro_error::proc_macro_error;
 use proc_macro_util::collect_tokens::TryCollectTokens;
-use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{
-  Attribute, Data, DeriveInput, Field, GenericArgument, PathArguments, Type, parse_macro_input,
-  spanned::Spanned,
+  parse_macro_input, spanned::Spanned, Attribute, Data, DeriveInput, Field, GenericArgument,
+  PathArguments, Type,
 };
-use util_impl::iter::JoinWith;
 
 use crate::error::{BuilderInternalError, BuilderInternalResult};
 
@@ -96,7 +95,7 @@ fn generate_default_field_member(field: &Field) -> BuilderInternalResult<TokenSt
     .as_ref()
     .ok_or_else(|| BuilderInternalError::new("Expect field to have a name", field.span()))?;
   let ty = &field.ty;
-  Ok(quote! { #ident: Option<#ty> })
+  Ok(quote! { #ident: Option<#ty>, })
 }
 
 fn generate_raw_field_member(field: &Field) -> BuilderInternalResult<TokenStream> {
@@ -105,7 +104,7 @@ fn generate_raw_field_member(field: &Field) -> BuilderInternalResult<TokenStream
     attrs: Vec::new(),
     ..field.clone()
   };
-  Ok(quote! { #field })
+  Ok(quote! { #field, })
 }
 
 fn generate_member_for_field(field: &Field) -> BuilderInternalResult<TokenStream> {
@@ -214,6 +213,8 @@ fn build_builder_impl(input: DeriveInput) -> BuilderInternalResult<TokenStream> 
     ));
   };
 
+  let visibility = input.vis;
+
   let builder_ident =
     proc_macro2::Ident::new(&format!("{}Builder", input.ident), input.ident.span());
 
@@ -222,7 +223,6 @@ fn build_builder_impl(input: DeriveInput) -> BuilderInternalResult<TokenStream> 
     .fields
     .iter()
     .map(generate_member_for_field)
-    .join_with(|| Ok(quote! { , }))
     .try_collect_tokens()?;
 
   let field_builders = data
@@ -235,7 +235,7 @@ fn build_builder_impl(input: DeriveInput) -> BuilderInternalResult<TokenStream> 
 
   Ok(quote! {
     #[derive(Default)]
-    struct #builder_ident {
+    #visibility struct #builder_ident {
       #fields
     }
     impl #builder_ident {
