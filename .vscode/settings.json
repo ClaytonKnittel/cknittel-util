@@ -1,12 +1,7 @@
 {
-  "rust-analyzer.linkedProjects": [
-    "./builder/Cargo.toml",
-    "./proc-macro-util/Cargo.toml",
-    "./util-impl/Cargo.toml",
-    "./Cargo.toml"
-  ],
   "rust-analyzer.check.command": "clippy",
   "rust-analyzer.cargo.features": [
-    "builder"
+    "builder",
+    "macro"
   ]
 }

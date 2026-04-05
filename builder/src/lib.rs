@@ -1,13 +1,85 @@
 mod error;
 
 use proc_macro_error::proc_macro_error;
-use proc_macro_util::collect_tokens::{CollectTokens, TryCollectTokens};
+use proc_macro_util::collect_tokens::TryCollectTokens;
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{Data, DeriveInput, Field, parse_macro_input, spanned::Spanned};
+use syn::{
+  Attribute, Data, DeriveInput, Field, GenericArgument, PathArguments, Type, parse_macro_input,
+  spanned::Spanned,
+};
 use util_impl::iter::JoinWith;
 
 use crate::error::{BuilderInternalError, BuilderInternalResult};
+
+enum FieldCategory {
+  Default,
+  Optional,
+}
+
+fn attribute_category(attr: &Attribute) -> Option<FieldCategory> {
+  if attr.path().is_ident("optional") {
+    Some(FieldCategory::Optional)
+  } else {
+    None
+  }
+}
+
+fn field_category(field: &Field) -> FieldCategory {
+  field
+    .attrs
+    .iter()
+    .find_map(attribute_category)
+    .unwrap_or(FieldCategory::Default)
+}
+
+fn extract_option_inner_type(ty: &Type) -> BuilderInternalResult<&Type> {
+  let Type::Path(path) = ty else {
+    return Err(BuilderInternalError::new(
+      "Expected field tagged with `optional` to have type `Option<...>`",
+      ty.span(),
+    ));
+  };
+
+  let segment = path
+    .path
+    .segments
+    .last()
+    .ok_or_else(|| BuilderInternalError::new("Unexpected empty type path", ty.span()))?;
+
+  if segment.ident != "Option" {
+    return Err(BuilderInternalError::new(
+      "Expected field tagged with `optional` to have type `Option<...>`",
+      segment.ident.span(),
+    ));
+  }
+
+  let PathArguments::AngleBracketed(generics) = &segment.arguments else {
+    return Err(BuilderInternalError::new(
+      "`optional` tag requires explicit generic arguments to `Option`",
+      ty.span(),
+    ));
+  };
+
+  let inner_generic_argument = generics.args.first().ok_or_else(|| {
+    BuilderInternalError::new("Unexpected empty generic arguments to `Option`", ty.span())
+  })?;
+
+  if generics.args.len() != 1 {
+    return Err(BuilderInternalError::new(
+      "Expected only one generic argument",
+      segment.arguments.span(),
+    ));
+  }
+
+  match inner_generic_argument {
+    GenericArgument::Type(ty) => Ok(ty),
+    _ => Err(BuilderInternalError::new(
+      "Expected inner generic argument of `Option` to be a type",
+      inner_generic_argument.span(),
+    )),
+  }
+}
 
 fn generate_default_field_member(field: &Field) -> BuilderInternalResult<TokenStream> {
   let ident = field
@@ -18,18 +90,34 @@ fn generate_default_field_member(field: &Field) -> BuilderInternalResult<TokenSt
   Ok(quote! { #ident: Option<#ty> })
 }
 
-fn generate_member_for_field(field: &Field) -> BuilderInternalResult<TokenStream> {
-  generate_default_field_member(field)
+fn generate_optional_field_member(field: &Field) -> BuilderInternalResult<TokenStream> {
+  let field = Field {
+    // Don't copy over any attributes from the original field.
+    attrs: Vec::new(),
+    ..field.clone()
+  };
+  Ok(quote! { #field })
 }
 
-fn generate_default_builders(field: &Field) -> BuilderInternalResult<TokenStream> {
+fn generate_member_for_field(field: &Field) -> BuilderInternalResult<TokenStream> {
+  match field_category(field) {
+    FieldCategory::Default => generate_default_field_member(field),
+    FieldCategory::Optional => generate_optional_field_member(field),
+  }
+}
+
+fn generate_builders_for_field(field: &Field) -> BuilderInternalResult<TokenStream> {
   let ident = field
     .ident
     .as_ref()
     .ok_or_else(|| BuilderInternalError::new("Expect field to have a name", field.span()))?;
   let with = proc_macro2::Ident::new(&format!("with_{}", ident), ident.span());
   let setter = proc_macro2::Ident::new(&format!("set_{}", ident), ident.span());
-  let ty = &field.ty;
+
+  let ty = match field_category(field) {
+    FieldCategory::Default => &field.ty,
+    FieldCategory::Optional => extract_option_inner_type(&field.ty)?,
+  };
 
   Ok(quote! {
     pub fn #setter(&mut self, value: #ty) {
@@ -40,14 +128,6 @@ fn generate_default_builders(field: &Field) -> BuilderInternalResult<TokenStream
       self
     }
   })
-}
-
-fn generate_builders_for_field(field: &Field) -> BuilderInternalResult<TokenStream> {
-  generate_default_builders(field)
-  // match &field.ty {
-  //   Type::Path(path) => {}
-  //   _ => {}
-  // }
 }
 
 fn generate_build<'a>(
@@ -62,14 +142,19 @@ fn generate_build<'a>(
         .as_ref()
         .expect("Already asserted that field has ident");
       let field_name_str = ident.to_string();
-      quote! {
-        #ident: self.#ident.ok_or_else(|| {
-          ::cknittel_util::builder::error::BuilderError::missing_field(#field_name_str)
-        })?
-      }
+
+      Ok(match field_category(field) {
+        FieldCategory::Default => quote! {
+          #ident: self.#ident.ok_or_else(|| {
+            ::cknittel_util::builder::error::BuilderError::missing_field(#field_name_str)
+          })?,
+        },
+        FieldCategory::Optional => quote! {
+          #ident: self.#ident,
+        },
+      })
     })
-    .join_with(|| quote! { , })
-    .collect_tokens();
+    .try_collect_tokens()?;
 
   Ok(quote! {
     pub fn build(self) -> ::cknittel_util::builder::error::BuilderResult<#result_type> {
@@ -120,7 +205,7 @@ fn build_builder_impl(input: DeriveInput) -> BuilderInternalResult<TokenStream> 
 }
 
 #[proc_macro_error]
-#[proc_macro_derive(Builder)]
+#[proc_macro_derive(Builder, attributes(optional))]
 /// Constructs a builder class.
 pub fn derive_builder(tokens: proc_macro::TokenStream) -> proc_macro::TokenStream {
   let input = parse_macro_input!(tokens as DeriveInput);

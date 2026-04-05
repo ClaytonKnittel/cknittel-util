@@ -1,3 +1,3 @@
 pub mod error;
 
-pub use builder::Builder;
+pub use ::builder::Builder;
