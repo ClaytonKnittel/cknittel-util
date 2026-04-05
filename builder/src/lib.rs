@@ -215,6 +215,7 @@ fn build_builder_impl(input: DeriveInput) -> BuilderInternalResult<TokenStream> 
 
   let visibility = input.vis;
 
+  let input_ident = &input.ident;
   let builder_ident =
     proc_macro2::Ident::new(&format!("{}Builder", input.ident), input.ident.span());
 
@@ -241,6 +242,13 @@ fn build_builder_impl(input: DeriveInput) -> BuilderInternalResult<TokenStream> 
     impl #builder_ident {
       #field_builders
       #builder
+    }
+    impl ::std::convert::TryFrom<#builder_ident> for #input_ident {
+      type Error = ::cknittel_util::builder::error::BuilderError;
+
+      fn try_from(value: #builder_ident) -> ::cknittel_util::builder::error::BuilderResult<Self> {
+        value.build()
+      }
     }
   })
 }
