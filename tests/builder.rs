@@ -73,3 +73,37 @@ fn test_build_missing_optional() {
     }))
   );
 }
+
+#[derive(Builder, Debug)]
+struct VecField {
+  #[vec]
+  strings: Vec<String>,
+}
+
+#[gtest]
+fn test_build_vec() {
+  let mut builder = VecFieldBuilder::default();
+  builder.push_strings("some_str".to_string());
+  let builder = builder.add_strings("other_str".to_string());
+  let res = builder.build();
+
+  expect_that!(
+    res,
+    ok(pat!(VecField {
+      strings: elements_are![eq("some_str"), eq("other_str")],
+    }))
+  );
+}
+
+#[gtest]
+fn test_build_empty_vec() {
+  let builder = VecFieldBuilder::default();
+  let res = builder.build();
+
+  expect_that!(
+    res,
+    ok(pat!(VecField {
+      strings: is_empty(),
+    }))
+  );
+}

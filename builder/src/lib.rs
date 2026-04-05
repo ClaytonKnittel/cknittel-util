@@ -15,11 +15,14 @@ use crate::error::{BuilderInternalError, BuilderInternalResult};
 enum FieldCategory {
   Default,
   Optional,
+  Vec,
 }
 
 fn attribute_category(attr: &Attribute) -> Option<FieldCategory> {
   if attr.path().is_ident("optional") {
     Some(FieldCategory::Optional)
+  } else if attr.path().is_ident("vec") {
+    Some(FieldCategory::Vec)
   } else {
     None
   }
@@ -33,10 +36,13 @@ fn field_category(field: &Field) -> FieldCategory {
     .unwrap_or(FieldCategory::Default)
 }
 
-fn extract_option_inner_type(ty: &Type) -> BuilderInternalResult<&Type> {
+fn extract_inner_type<'a>(
+  ty: &'a Type,
+  expected_type_name: &str,
+) -> BuilderInternalResult<&'a Type> {
   let Type::Path(path) = ty else {
     return Err(BuilderInternalError::new(
-      "Expected field tagged with `optional` to have type `Option<...>`",
+      format!("Expected field to have type `{expected_type_name}<...>`"),
       ty.span(),
     ));
   };
@@ -47,22 +53,25 @@ fn extract_option_inner_type(ty: &Type) -> BuilderInternalResult<&Type> {
     .last()
     .ok_or_else(|| BuilderInternalError::new("Unexpected empty type path", ty.span()))?;
 
-  if segment.ident != "Option" {
+  if segment.ident != expected_type_name {
     return Err(BuilderInternalError::new(
-      "Expected field tagged with `optional` to have type `Option<...>`",
+      format!("Expected field to have type `{expected_type_name}<...>`"),
       segment.ident.span(),
     ));
   }
 
   let PathArguments::AngleBracketed(generics) = &segment.arguments else {
     return Err(BuilderInternalError::new(
-      "`optional` tag requires explicit generic arguments to `Option`",
+      format!("`optional` tag requires explicit generic arguments to `{expected_type_name}`"),
       ty.span(),
     ));
   };
 
   let inner_generic_argument = generics.args.first().ok_or_else(|| {
-    BuilderInternalError::new("Unexpected empty generic arguments to `Option`", ty.span())
+    BuilderInternalError::new(
+      format!("Unexpected empty generic arguments to `{expected_type_name}`"),
+      ty.span(),
+    )
   })?;
 
   if generics.args.len() != 1 {
@@ -75,7 +84,7 @@ fn extract_option_inner_type(ty: &Type) -> BuilderInternalResult<&Type> {
   match inner_generic_argument {
     GenericArgument::Type(ty) => Ok(ty),
     _ => Err(BuilderInternalError::new(
-      "Expected inner generic argument of `Option` to be a type",
+      format!("Expected inner generic argument of `{expected_type_name}` to be a type"),
       inner_generic_argument.span(),
     )),
   }
@@ -90,7 +99,7 @@ fn generate_default_field_member(field: &Field) -> BuilderInternalResult<TokenSt
   Ok(quote! { #ident: Option<#ty> })
 }
 
-fn generate_optional_field_member(field: &Field) -> BuilderInternalResult<TokenStream> {
+fn generate_raw_field_member(field: &Field) -> BuilderInternalResult<TokenStream> {
   let field = Field {
     // Don't copy over any attributes from the original field.
     attrs: Vec::new(),
@@ -102,11 +111,11 @@ fn generate_optional_field_member(field: &Field) -> BuilderInternalResult<TokenS
 fn generate_member_for_field(field: &Field) -> BuilderInternalResult<TokenStream> {
   match field_category(field) {
     FieldCategory::Default => generate_default_field_member(field),
-    FieldCategory::Optional => generate_optional_field_member(field),
+    FieldCategory::Optional | FieldCategory::Vec => generate_raw_field_member(field),
   }
 }
 
-fn generate_builders_for_field(field: &Field) -> BuilderInternalResult<TokenStream> {
+fn generate_builders_for_singular_field(field: &Field) -> BuilderInternalResult<TokenStream> {
   let ident = field
     .ident
     .as_ref()
@@ -116,7 +125,8 @@ fn generate_builders_for_field(field: &Field) -> BuilderInternalResult<TokenStre
 
   let ty = match field_category(field) {
     FieldCategory::Default => &field.ty,
-    FieldCategory::Optional => extract_option_inner_type(&field.ty)?,
+    FieldCategory::Optional => extract_inner_type(&field.ty, "Option")?,
+    FieldCategory::Vec => unreachable!(),
   };
 
   Ok(quote! {
@@ -128,6 +138,37 @@ fn generate_builders_for_field(field: &Field) -> BuilderInternalResult<TokenStre
       self
     }
   })
+}
+
+fn generate_builders_for_list_field(field: &Field) -> BuilderInternalResult<TokenStream> {
+  let ident = field
+    .ident
+    .as_ref()
+    .ok_or_else(|| BuilderInternalError::new("Expect field to have a name", field.span()))?;
+  let push = proc_macro2::Ident::new(&format!("push_{}", ident), ident.span());
+  let add = proc_macro2::Ident::new(&format!("add_{}", ident), ident.span());
+
+  let ty = match field_category(field) {
+    FieldCategory::Vec => extract_inner_type(&field.ty, "Vec")?,
+    FieldCategory::Default | FieldCategory::Optional => unreachable!(),
+  };
+
+  Ok(quote! {
+    pub fn #push(&mut self, value: #ty) {
+      self.#ident.push(value);
+    }
+    pub fn #add(mut self, value: #ty) -> Self {
+      self.#ident.push(value);
+      self
+    }
+  })
+}
+
+fn generate_builders_for_field(field: &Field) -> BuilderInternalResult<TokenStream> {
+  match field_category(field) {
+    FieldCategory::Default | FieldCategory::Optional => generate_builders_for_singular_field(field),
+    FieldCategory::Vec => generate_builders_for_list_field(field),
+  }
 }
 
 fn generate_build<'a>(
@@ -149,7 +190,7 @@ fn generate_build<'a>(
             ::cknittel_util::builder::error::BuilderError::missing_field(#field_name_str)
           })?,
         },
-        FieldCategory::Optional => quote! {
+        FieldCategory::Optional | FieldCategory::Vec => quote! {
           #ident: self.#ident,
         },
       })
@@ -205,7 +246,7 @@ fn build_builder_impl(input: DeriveInput) -> BuilderInternalResult<TokenStream> 
 }
 
 #[proc_macro_error]
-#[proc_macro_derive(Builder, attributes(optional))]
+#[proc_macro_derive(Builder, attributes(optional, vec))]
 /// Constructs a builder class.
 pub fn derive_builder(tokens: proc_macro::TokenStream) -> proc_macro::TokenStream {
   let input = parse_macro_input!(tokens as DeriveInput);
