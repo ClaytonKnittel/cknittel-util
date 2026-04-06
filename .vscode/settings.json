@@ -2,6 +2,7 @@
   "rust-analyzer.check.command": "clippy",
   "rust-analyzer.cargo.features": [
     "builder",
+    "from-variants",
     "macro"
   ]
 }
