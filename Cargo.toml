@@ -5,12 +5,14 @@ edition = "2024"
 
 [dependencies]
 builder = { path = "./builder", optional = true }
+from-variants = { path = "./from-variants", optional = true }
 proc-macro-util = { path = "./proc-macro-util", optional = true }
 util-impl = { path = "./util-impl" }
 
 [features]
-macro = ["dep:proc-macro-util"]
 builder = ["dep:builder"]
+from-variants = ["dep:from-variants"]
+macro = ["dep:proc-macro-util"]
 
 [dev-dependencies]
 googletest = "0.14.2"
