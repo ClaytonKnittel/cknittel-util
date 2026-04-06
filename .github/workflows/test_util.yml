@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        features: ["", "--all-features"]
+        features: ["", "builder", "from-variants", "macro", "--all-features"]
 
     name: "Build and Unit Test ${{ matrix.features }}"
 
