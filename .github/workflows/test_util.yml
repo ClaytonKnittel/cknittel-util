@@ -27,10 +27,6 @@ jobs:
         working-directory: cknittel-util
         run: |
           cargo build $CARGO_ARGS
-      - name: Run util-impl unit tests
-        working-directory: cknittel-util/util-impl
-        run: |
-          cargo test $CARGO_ARGS
       - name: Run unit tests
         working-directory: cknittel-util
         run: |
@@ -39,18 +35,6 @@ jobs:
         working-directory: cknittel-util
         run: |
           cargo test $CARGO_ARGS --release
-      - name: Clippy lint builder
-        working-directory: cknittel-util/builder
-        run: |
-          cargo clippy $CARGO_ARGS -- -D warnings
-      - name: Clippy lint proc-macro-util
-        working-directory: cknittel-util/proc-macro-util
-        run: |
-          cargo clippy $CARGO_ARGS -- -D warnings
-      - name: Clippy lint util-impl
-        working-directory: cknittel-util/util-impl
-        run: |
-          cargo clippy $CARGO_ARGS -- -D warnings
       - name: Clippy lint
         working-directory: cknittel-util
         run: |
