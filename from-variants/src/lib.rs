@@ -1,17 +1,44 @@
 mod error;
 
-use proc_macro_error::proc_macro_error;
-use proc_macro_util::collect_tokens::TryCollectTokens;
 use proc_macro2::{Ident, TokenStream};
+use proc_macro_error::proc_macro_error;
+use proc_macro_util::collect_tokens::{CollectTokens, TryCollectTokens};
 use quote::quote;
-use syn::{Data, DeriveInput, Fields, Variant, parse_macro_input, spanned::Spanned};
+use syn::{
+  parse_macro_input, spanned::Spanned, Data, DeriveInput, Fields, GenericParam, Generics, Variant,
+};
+use util_impl::iter::JoinWith;
 
 use crate::error::{FromVariantsInternalError, FromVariantsInternalResult};
 
 type TokenStreamResult = FromVariantsInternalResult<TokenStream>;
 
-fn impl_from_variant(variant: &Variant, enum_ident: &Ident) -> TokenStreamResult {
+fn generic_args(generics: &Generics) -> TokenStream {
+  generics
+    .params
+    .iter()
+    .map(|param| match param {
+      GenericParam::Lifetime(lifetime) => quote! { #lifetime },
+      GenericParam::Type(type_param) => {
+        let ident = &type_param.ident;
+        quote! { #ident }
+      }
+      GenericParam::Const(const_param) => {
+        let ident = &const_param.ident;
+        quote! { #ident }
+      }
+    })
+    .join_with(|| quote! { , })
+    .collect_tokens()
+}
+
+fn impl_from_variant(
+  variant: &Variant,
+  enum_ident: &Ident,
+  generics: &Generics,
+) -> TokenStreamResult {
   let variant_name = &variant.ident;
+  let generic_args = generic_args(generics);
 
   let fields = match &variant.fields {
     Fields::Unnamed(unnamed) => unnamed,
@@ -37,7 +64,7 @@ fn impl_from_variant(variant: &Variant, enum_ident: &Ident) -> TokenStreamResult
   let ty = &data.ty;
 
   Ok(quote! {
-    impl From<#ty> for #enum_ident {
+    impl #generics From<#ty> for #enum_ident<#generic_args> {
       fn from(value: #ty) -> Self {
         Self::#variant_name(value)
       }
@@ -54,11 +81,12 @@ fn build_from_variants_impl(input: DeriveInput) -> TokenStreamResult {
   };
 
   let input_ident = &input.ident;
+  let generics = &input.generics;
 
   let variant_impls = data
     .variants
     .iter()
-    .map(|variant| impl_from_variant(variant, input_ident))
+    .map(|variant| impl_from_variant(variant, input_ident, generics))
     .try_collect_tokens()?;
 
   Ok(quote! {
