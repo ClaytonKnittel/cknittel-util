@@ -1,8 +1,8 @@
 mod error;
 
-use proc_macro2::TokenStream;
+use proc_macro2::{Ident, TokenStream};
 use proc_macro_error::proc_macro_error;
-use proc_macro_util::collect_tokens::TryCollectTokens;
+use proc_macro_util::{collect_tokens::TryCollectTokens, generics::StripTraitBounds};
 use quote::quote;
 use syn::{
   parse_macro_input, spanned::Spanned, Attribute, Data, DeriveInput, Field, GenericArgument,
@@ -172,7 +172,8 @@ fn generate_builders_for_field(field: &Field) -> BuilderInternalResult<TokenStre
 
 fn generate_build<'a>(
   fields: impl IntoIterator<Item = &'a Field>,
-  result_type: &proc_macro2::Ident,
+  input_ident: &Ident,
+  generic_args: &TokenStream,
 ) -> BuilderInternalResult<TokenStream> {
   let field_initializers = fields
     .into_iter()
@@ -197,8 +198,8 @@ fn generate_build<'a>(
     .try_collect_tokens()?;
 
   Ok(quote! {
-    pub fn build(self) -> ::cknittel_util::builder::error::BuilderResult<#result_type> {
-      Ok(#result_type {
+    pub fn build(self) -> ::cknittel_util::builder::error::BuilderResult<#input_ident #generic_args> {
+      Ok(#input_ident {
         #field_initializers
       })
     }
@@ -213,7 +214,10 @@ fn build_builder_impl(input: DeriveInput) -> BuilderInternalResult<TokenStream> 
     ));
   };
 
-  let visibility = input.vis;
+  let visibility = &input.vis;
+  let generics = &input.generics;
+  let where_clause = &generics.where_clause;
+  let generic_args = generics.strip_trait_bounds();
 
   let input_ident = &input.ident;
   let builder_ident =
@@ -232,21 +236,21 @@ fn build_builder_impl(input: DeriveInput) -> BuilderInternalResult<TokenStream> 
     .map(generate_builders_for_field)
     .try_collect_tokens()?;
 
-  let builder = generate_build(data.fields.iter(), &input.ident)?;
+  let builder = generate_build(data.fields.iter(), input_ident, &generic_args)?;
 
   Ok(quote! {
     #[derive(Default)]
-    #visibility struct #builder_ident {
+    #visibility struct #builder_ident #generics #where_clause {
       #fields
     }
-    impl #builder_ident {
+    impl #generics #builder_ident #generic_args #where_clause {
       #field_builders
       #builder
     }
-    impl ::std::convert::TryFrom<#builder_ident> for #input_ident {
+    impl #generics ::std::convert::TryFrom<#builder_ident #generic_args> for #input_ident #generic_args #where_clause {
       type Error = ::cknittel_util::builder::error::BuilderError;
 
-      fn try_from(value: #builder_ident) -> ::cknittel_util::builder::error::BuilderResult<Self> {
+      fn try_from(value: #builder_ident #generic_args) -> ::cknittel_util::builder::error::BuilderResult<Self> {
         value.build()
       }
     }

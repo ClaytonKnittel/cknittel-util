@@ -1,6 +1,6 @@
 #![cfg(feature = "builder")]
 
-use cknittel_util::builder::{Builder, error::BuilderError};
+use cknittel_util::builder::{error::BuilderError, Builder};
 use googletest::prelude::*;
 
 #[derive(Builder, Debug)]
@@ -104,6 +104,55 @@ fn test_build_empty_vec() {
     res,
     ok(pat!(VecField {
       strings: is_empty(),
+    }))
+  );
+}
+
+#[derive(Builder, Debug)]
+struct Generic<T> {
+  field: T,
+  #[vec]
+  vec: Vec<T>,
+}
+
+#[gtest]
+fn test_build_generic() {
+  let builder = GenericBuilder::default();
+  let mut builder = builder.with_field("test".to_string());
+  builder.push_vec("some_str".to_string());
+  let builder = builder.add_vec("other_str".to_string());
+  let res = builder.build();
+
+  expect_that!(
+    res,
+    ok(pat!(Generic {
+      field: "test",
+      vec: elements_are![eq("some_str"), eq("other_str")],
+    }))
+  );
+}
+
+#[derive(Builder, Debug)]
+struct GenericWithBounds<T: Default, U>
+where
+  U: Default,
+{
+  field1: T,
+  field2: U,
+}
+
+#[gtest]
+fn test_build_generic_with_bounds() {
+  let mut builder = GenericWithBoundsBuilder::default();
+  builder.set_field1(1.2);
+  builder.set_field2(100);
+  let res = builder.build();
+
+  expect_that!(
+    res,
+    ok(pat!(GenericWithBounds {
+      field1: eq(&1.2),
+      field2: eq(&100)
     }))
   );
 }

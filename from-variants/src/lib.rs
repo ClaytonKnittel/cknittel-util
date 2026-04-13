@@ -2,35 +2,13 @@ mod error;
 
 use proc_macro2::{Ident, TokenStream};
 use proc_macro_error::proc_macro_error;
-use proc_macro_util::collect_tokens::{CollectTokens, TryCollectTokens};
+use proc_macro_util::{collect_tokens::TryCollectTokens, generics::StripTraitBounds};
 use quote::quote;
-use syn::{
-  parse_macro_input, spanned::Spanned, Data, DeriveInput, Fields, GenericParam, Generics, Variant,
-};
-use util_impl::iter::JoinWith;
+use syn::{parse_macro_input, spanned::Spanned, Data, DeriveInput, Fields, Generics, Variant};
 
 use crate::error::{FromVariantsInternalError, FromVariantsInternalResult};
 
 type TokenStreamResult = FromVariantsInternalResult<TokenStream>;
-
-fn generic_args(generics: &Generics) -> TokenStream {
-  generics
-    .params
-    .iter()
-    .map(|param| match param {
-      GenericParam::Lifetime(lifetime) => quote! { #lifetime },
-      GenericParam::Type(type_param) => {
-        let ident = &type_param.ident;
-        quote! { #ident }
-      }
-      GenericParam::Const(const_param) => {
-        let ident = &const_param.ident;
-        quote! { #ident }
-      }
-    })
-    .join_with(|| quote! { , })
-    .collect_tokens()
-}
 
 fn impl_from_variant(
   variant: &Variant,
@@ -38,7 +16,7 @@ fn impl_from_variant(
   generics: &Generics,
 ) -> TokenStreamResult {
   let variant_name = &variant.ident;
-  let generic_args = generic_args(generics);
+  let generic_args = generics.strip_trait_bounds();
 
   let fields = match &variant.fields {
     Fields::Unnamed(unnamed) => unnamed,
@@ -64,7 +42,7 @@ fn impl_from_variant(
   let ty = &data.ty;
 
   Ok(quote! {
-    impl #generics From<#ty> for #enum_ident<#generic_args> {
+    impl #generics From<#ty> for #enum_ident #generic_args {
       fn from(value: #ty) -> Self {
         Self::#variant_name(value)
       }
