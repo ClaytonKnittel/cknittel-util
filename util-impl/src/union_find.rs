@@ -40,8 +40,8 @@ impl UnionFind {
     debug_assert!(node_id < self.capacity());
     let mut node = self.get_node(node_id);
 
-    while node.parent as usize != node_id {
-      let parent = self.get_node(node.parent as usize);
+    while node.parent != node_id {
+      let parent = self.get_node(node.parent);
       // Slowly compress tree by assigning node's parent to its grandparent.
       unsafe {
         self.elements.get_unchecked_mut(node_id).parent = parent.parent;
@@ -50,7 +50,7 @@ impl UnionFind {
       // Next look at the former parent of node, rather than skipping to it's
       // new parent. This will cause a long chain of nodes to be compressed into
       // two equally-sized trees.
-      node_id = node.parent as usize;
+      node_id = node.parent;
       node = parent;
     }
 
