@@ -78,7 +78,7 @@ impl UnionFind {
 
 #[cfg(test)]
 mod tests {
-  use crate::UnionFind;
+  use crate::union_find::UnionFind;
 
   #[test]
   fn test_basic() {
