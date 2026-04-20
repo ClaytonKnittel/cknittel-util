@@ -26,7 +26,11 @@ where
     }
   }
 
-  fn inner_mut(&mut self) -> &mut Peekable<I> {
+  pub fn inner(&self) -> &Peekable<I> {
+    unsafe { &mut *self.stream.get() }
+  }
+
+  pub fn inner_mut(&mut self) -> &mut Peekable<I> {
     unsafe { &mut *self.stream.get() }
   }
 
