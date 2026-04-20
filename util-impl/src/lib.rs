@@ -5,4 +5,5 @@ pub mod iter_ones;
 pub mod option;
 pub mod peekable_stream;
 pub mod result;
+pub mod tuple;
 pub mod union_find;
