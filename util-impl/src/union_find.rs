@@ -59,7 +59,7 @@ impl<'a, T> RootNodeProxy<'a, T> {
     self.id
   }
 
-  pub fn data(&self) -> &T {
+  pub fn data(&self) -> &'a T {
     let data_option = self.union_find.get_node(self.id).data.as_ref();
     unsafe { data_option.unwrap_unchecked() }
   }
@@ -68,7 +68,7 @@ impl<'a, T> RootNodeProxy<'a, T> {
 impl<'a, T> Deref for RootNodeProxy<'a, T> {
   type Target = T;
 
-  fn deref(&self) -> &T {
+  fn deref(&self) -> &'a T {
     self.data()
   }
 }
@@ -211,6 +211,17 @@ impl<T: UnionFindData> UnionFind<T> {
       id: a_root_id,
     })
   }
+
+  /// Adds a new singleton set with `data`.
+  pub fn add_set(&mut self, data: T) -> usize {
+    let id = self.elements.len();
+    self.elements.push(Node {
+      parent: id,
+      data: Some(data),
+    });
+    self.unique_sets += 1;
+    id
+  }
 }
 
 impl<T: UnionFindData<Error = Infallible>> UnionFind<T> {
@@ -344,5 +355,16 @@ mod tests {
       uf.find(2),
       property!(&RootNodeProxy::<Data>.data(), eq(&Data(255)))
     );
+  }
+
+  #[gtest]
+  fn test_add_set() {
+    let mut uf: UnionFind<()> = UnionFind::new(0);
+    let id1 = uf.add_set(());
+    let id2 = uf.add_set(());
+
+    expect_that!(uf.unique_sets(), eq(2));
+    expect_that!(uf.try_union(id1, id2), ok(anything()));
+    expect_that!(uf.unique_sets(), eq(1));
   }
 }
