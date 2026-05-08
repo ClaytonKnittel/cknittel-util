@@ -65,6 +65,36 @@ impl<'a, T> RootNodeProxy<'a, T> {
   }
 }
 
+pub struct RootNodeMutProxy<'a, T> {
+  union_find: &'a mut UnionFind<T>,
+  id: usize,
+}
+
+impl<'a, T> RootNodeMutProxy<'a, T> {
+  pub fn id(&self) -> usize {
+    self.id
+  }
+
+  pub fn data(&mut self) -> &T {
+    let data_option = self.union_find.get_node(self.id).data.as_ref();
+    unsafe { data_option.unwrap_unchecked() }
+  }
+
+  pub fn data_mut(&mut self) -> &mut T {
+    let data_option = self.union_find.get_node_mut(self.id).data.as_mut();
+    unsafe { data_option.unwrap_unchecked() }
+  }
+}
+
+impl<'a, T> From<RootNodeMutProxy<'a, T>> for RootNodeProxy<'a, T> {
+  fn from(value: RootNodeMutProxy<'a, T>) -> Self {
+    RootNodeProxy {
+      union_find: value.union_find,
+      id: value.id,
+    }
+  }
+}
+
 impl<'a, T> Deref for RootNodeProxy<'a, T> {
   type Target = T;
 
@@ -101,6 +131,15 @@ impl UnionFind<()> {
   }
 }
 
+impl<T> Default for UnionFind<T> {
+  fn default() -> Self {
+    Self {
+      unique_sets: Default::default(),
+      elements: Default::default(),
+    }
+  }
+}
+
 impl<T> UnionFind<T> {
   pub fn capacity(&self) -> usize {
     self.elements.len()
@@ -120,8 +159,8 @@ impl<T> UnionFind<T> {
     unsafe { self.elements.get_unchecked_mut(node_id) }
   }
 
-  /// Gives id of the root of tree that node is in.
-  pub fn find(&mut self, mut node_id: usize) -> RootNodeProxy<'_, T> {
+  /// Gives a mutable proxy to the root of tree that node_id is in.
+  pub fn find_mut(&mut self, mut node_id: usize) -> RootNodeMutProxy<'_, T> {
     debug_assert!(node_id < self.capacity());
 
     while self.get_node(node_id).parent != node_id {
@@ -139,10 +178,15 @@ impl<T> UnionFind<T> {
       node_id = parent_id;
     }
 
-    RootNodeProxy {
+    RootNodeMutProxy {
       union_find: self,
       id: node_id,
     }
+  }
+
+  /// Gives a proxy to the root of tree that node_id is in.
+  pub fn find(&mut self, node_id: usize) -> RootNodeProxy<'_, T> {
+    self.find_mut(node_id).into()
   }
 
   /// Gives id of the root of tree that node is in. Does not do path compression.
@@ -156,6 +200,21 @@ impl<T> UnionFind<T> {
     RootNodeProxy {
       union_find: self,
       id: node_id,
+    }
+  }
+
+  /// Adds a new singleton set with `data`.
+  pub fn add_set(&mut self, data: T) -> RootNodeProxy<'_, T> {
+    let id = self.elements.len();
+    self.elements.push(Node {
+      parent: id,
+      data: Some(data),
+    });
+    self.unique_sets += 1;
+
+    RootNodeProxy {
+      union_find: self,
+      id,
     }
   }
 }
@@ -344,5 +403,16 @@ mod tests {
       uf.find(2),
       property!(&RootNodeProxy::<Data>.data(), eq(&Data(255)))
     );
+  }
+
+  #[gtest]
+  fn test_add_set() {
+    let mut uf: UnionFind<()> = UnionFind::new(0);
+    let id1 = uf.add_set(()).id();
+    let id2 = uf.add_set(()).id();
+
+    expect_that!(uf.unique_sets(), eq(2));
+    expect_that!(uf.try_union(id1, id2), ok(anything()));
+    expect_that!(uf.unique_sets(), eq(1));
   }
 }
